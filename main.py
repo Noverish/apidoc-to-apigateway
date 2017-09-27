@@ -2,38 +2,24 @@ import boto3
 from pprint import pprint
 import json
 import re
+import config
 
-AWS_ACCOUNT_ID = "464151917901"
-REGION = "ap-northeast-2"
-REST_API_NAME = "KUSulang_v2"
-JSON_PATH = "../KUSulang-lambda/doc/api_data.json"
-DEFAULT_STATUS_CODE = [400, 401, 403, 404, 500]
-SELECTION_PATTERN = {
-    '200': '',
-    '204': '',
-    '400': '\[400 Bad Request.*',
-    '401': '\[401 Unauthorized.*',
-    '403': '\[403 Forbidden.*',
-    '404': '\[404 Not Found.*',
-    '500': '.+'
-}
-
-client = boto3.Session(profile_name='zium').client('apigateway')
-lambda_client = boto3.Session(profile_name='zium').client('lambda')
-rest_api_id = list(filter(lambda api: api['name'] == REST_API_NAME, client.get_rest_apis()['items']))[0]['id']
+client = boto3.Session(profile_name=config.PROFILE_NAME).client('apigateway')
+lambda_client = boto3.Session(profile_name=config.PROFILE_NAME).client('lambda')
+rest_api_id = list(filter(lambda api: api['name'] == config.REST_API_NAME, client.get_rest_apis()['items']))[0]['id']
 resources = client.get_resources(restApiId=rest_api_id, limit=500)['items']
 
 f = open('template.txt')
 template = f.read()
 f.close()
 
-for method in json.load(open(JSON_PATH)):
+for method in json.load(open(config.JSON_PATH)):
     httpMethod = method['type'].upper()
     path = method['url']
     statusCodes = [int(res['content'][9:12]) for res in method['success']['examples']]
     print('Processing', httpMethod, path, statusCodes)
 
-    statusCodes += DEFAULT_STATUS_CODE
+    statusCodes += config.DEFAULT_STATUS_CODE
 
     parent_path = ""
     now_path = ""
@@ -75,11 +61,11 @@ for method in json.load(open(JSON_PATH)):
         print('  Created Method :', httpMethod)
 
 # Connect lambda function to method
-    function_name = REST_API_NAME + "_" + method['title']
+    function_name = config.REST_API_NAME + "_" + method['title']
     origin_function_name = function_name
     function_name = function_name.replace("other_", "")
     function_arn = lambda_client.get_function(FunctionName=function_name)['Configuration']['FunctionArn']
-    uri = 'arn:aws:apigateway:' + REGION + ':lambda:path/2015-03-31/functions/' + function_arn + '/invocations'
+    uri = 'arn:aws:apigateway:' + config.REGION + ':lambda:path/2015-03-31/functions/' + function_arn + '/invocations'
 
     try:
         aws_integration = client.get_integration(restApiId=rest_api_id, resourceId=resourceId, httpMethod=httpMethod)
@@ -101,7 +87,7 @@ for method in json.load(open(JSON_PATH)):
         print('  Created Integration :', method['title'])
 
 # Added permission to lambda function
-    sourceArn = 'arn:aws:execute-api:' + REGION + ':' + AWS_ACCOUNT_ID + ':' + rest_api_id + '/*/' + httpMethod + re.sub(r'[{][^}]*?[}]', '*', path)
+    sourceArn = 'arn:aws:execute-api:' + config.REGION + ':' + config.AWS_ACCOUNT_ID + ':' + rest_api_id + '/*/' + httpMethod + re.sub(r'[{][^}]*?[}]', '*', path)
 
     has_permission = False
     try:
@@ -157,7 +143,7 @@ for method in json.load(open(JSON_PATH)):
                 statusCode=statusCode
             )
 
-            if SELECTION_PATTERN[statusCode] != aws_integration_res['selectionPattern']:
+            if config.SELECTION_PATTERN[statusCode] != aws_integration_res['selectionPattern']:
                 response = client.delete_integration_response(
                     restApiId=rest_api_id,
                     resourceId=resourceId,
@@ -177,57 +163,9 @@ for method in json.load(open(JSON_PATH)):
                 resourceId=resourceId,
                 httpMethod=httpMethod,
                 statusCode=statusCode,
-                selectionPattern=SELECTION_PATTERN[statusCode]
+                selectionPattern=config.SELECTION_PATTERN[statusCode]
             )
 
             print('  Created Integration Response :', statusCode)
 
-    # resource = None
-    #
-    # try:
-    #     resource = [r for r in resources if r['path'] == path][0]
-    # except IndexError:
-    #     for i, part in :
-    #         parent_path =
-    #         print(parent_path)
-    #         print("asdf")
-
-        # resource = client.create_resource(restApiId=rest_api_id, parentId='string', pathPart='string')
-
-#
-#
-#
-#
-# for resource in resources:
-#     if 'resourceMethods' not in resource:
-#         continue
-#
-#     for httpMethod in resource['resourceMethods'].keys():
-#
-#         resourceId = resource['id']
-#         path = resource['path'].replace('{', ':').replace('}', '')
-#
-#         if path == '/':
-#             continue
-#
-#         print(path)
-#         print(methods[httpMethod + " " + path])
-#
-#         method = client.get_method(restApiId=rest_api_id, resourceId=resourceId, httpMethod=httpMethod)
-#
-#         methodResponses = method['methodResponses']
-#         methodIntegration = method['methodIntegration']
-#         integrationResponses = methodIntegration['integrationResponses']
-
-        # tmp = client.put_method_response(
-        #     restApiId=rest_api_id,
-        #     resourceId=resourceId,
-        #     httpMethod=httpMethod,
-        #     statusCode='string',
-        #     responseParameters={
-        #         'string': True | False
-        #     },
-        #     responseModels={
-        #         'string': 'string'
-        #     }
-        # )
+print('done!')
