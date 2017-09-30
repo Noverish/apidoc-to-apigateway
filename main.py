@@ -168,4 +168,9 @@ for method in json.load(open(config.JSON_PATH)):
 
             print('  Created Integration Response :', statusCode)
 
+response = client.create_deployment(
+    restApiId=rest_api_id,
+    stageName=config.STAGE_NAME
+)
+
 print('done!')
