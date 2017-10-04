@@ -14,6 +14,8 @@ template = f.read()
 f.close()
 
 for method in json.load(open(config.JSON_PATH)):
+    title = method['title']
+    function_name = method['name']
     httpMethod = method['type'].upper()
     path = method['url']
     statusCodes = [int(res['content'][9:12]) for res in method['success']['examples']]
@@ -61,9 +63,6 @@ for method in json.load(open(config.JSON_PATH)):
         print('  Created Method :', httpMethod)
 
 # Connect lambda function to method
-    function_name = config.REST_API_NAME + "_" + method['title']
-    origin_function_name = function_name
-    function_name = function_name.replace("other_", "")
     function_arn = lambda_client.get_function(FunctionName=function_name)['Configuration']['FunctionArn']
     uri = 'arn:aws:apigateway:' + config.REGION + ':lambda:path/2015-03-31/functions/' + function_arn + '/invocations'
 
@@ -84,7 +83,7 @@ for method in json.load(open(config.JSON_PATH)):
             contentHandling='CONVERT_TO_TEXT'
         )
 
-        print('  Created Integration :', method['title'])
+        print('  Created Integration :', function_name)
 
 # Added permission to lambda function
     sourceArn = 'arn:aws:execute-api:' + config.REGION + ':' + config.AWS_ACCOUNT_ID + ':' + rest_api_id + '/*/' + httpMethod + re.sub(r'[{][^}]*?[}]', '*', path)
@@ -105,13 +104,13 @@ for method in json.load(open(config.JSON_PATH)):
     if not has_permission:
         response = lambda_client.add_permission(
             FunctionName=function_name,
-            StatementId='custom_statement_id_' + origin_function_name,
+            StatementId='custom_statement_id_' + title,
             Action='lambda:InvokeFunction',
             Principal='apigateway.amazonaws.com',
             SourceArn=sourceArn
         )
 
-        print('  Added Permission to Lambda Function :', method['title'])
+        print('  Added Permission to Lambda Function :', function_name)
 
 # Process status code and integration response
     for statusCode in [str(code) for code in statusCodes]:
